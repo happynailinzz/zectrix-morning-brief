@@ -212,18 +212,17 @@ def parse_qmrl(date):
 
 
 def next_solar_term(text, date):
-    """The source lists monthly events without a dedicated current-term field."""
+    """Return the next solar term as a compact name and date."""
     month_text = between(text, "%d年%d所有节日节气" % (date.year, date.month), "小运播报")
     candidates = []
-    for month, day, name in re.findall(r"(\d{1,2})月(\d{1,2})日([^\d\s]+)", month_text):
-        if name in {"寒露", "霜降", "立冬", "小雪", "大雪", "冬至", "小寒", "大寒", "立春", "雨水", "惊蛰", "春分", "清明", "谷雨", "立夏", "小满", "芒种", "夏至", "小暑", "大暑", "立秋", "处暑", "白露", "秋分"}:
+    terms = {"寒露", "霜降", "立冬", "小雪", "大雪", "冬至", "小寒", "大寒", "立春", "雨水", "惊蛰", "春分", "清明", "谷雨", "立夏", "小满", "芒种", "夏至", "小暑", "大暑", "立秋", "处暑", "白露", "秋分"}
+    for month, day, name in re.findall(r"(\d{1,2})月(\d{1,2})日\s*([^\d\s]+)", month_text):
+        if name in terms:
             event_date = dt.date(date.year, int(month), int(day))
             candidates.append((event_date, name))
-    upcoming = sorted(item for item in candidates if item[0] >= date)
-    if upcoming and upcoming[0][0] == date:
-        return upcoming[0][1]
+    upcoming = sorted(item for item in candidates if item[0] > date)
     if upcoming:
-        return "无（下个节气：%s %d月%d日）" % (upcoming[0][1], upcoming[0][0].month, upcoming[0][0].day)
+        return "%s %d月%d日" % (upcoming[0][1], upcoming[0][0].month, upcoming[0][0].day)
     return "无"
 
 
@@ -243,7 +242,7 @@ def parse_colors(text):
     for index, (key, marker) in enumerate(labels):
         end_marker = labels[index + 1][1] if index + 1 < len(labels) else None
         segment = between(section, marker, end_marker)
-        values = re.findall(r"(?:黑色|深蓝色|深灰色|白色|银白色|浅灰色|金色|红色|紫色|玫红色|粉色|黄色|焦糖色|咖啡色|绿色|蓝色|青色|泥土色)", segment)
+        values = re.findall(r"(?:黑色|深蓝色|深灰色|白色|银白色|银色|浅灰色|金色|红色|紫色|玫红色|粉红色|粉色|黄色|焦糖色|咖啡色|绿色|蓝色|青色|泥土色)", segment)
         result[key] = list(dict.fromkeys(values))
     return result
 
@@ -336,7 +335,7 @@ def draw_temperature_chart(draw, x, y, width, height, weather, small_font):
     low = min(values + [weather.get("low", 0)])
     high = max(values + [weather.get("high", 0)])
     span = max(1, high - low)
-    draw.text((x, y - 12), "今日温度", font=small_font, fill=0)
+    draw.text((x, y - 12), "明日温度" if weather.get("forecast") else "今日温度", font=small_font, fill=0)
     # Use the full left side for the plot; the axis carries no temperature labels.
     axis_x = x + 2
     plot_right = x + width - 8
@@ -415,14 +414,21 @@ def render(config, date, data, output):
     # Use one compact two-column grid so all four metrics share the same rhythm.
     metric_font = f_tiny
     metric_x = round(12 + draw.textlength(range_prefix + condition[:-1], font=f_small))
-    draw.text((12, 112), "体感 %d℃" % weather["feels"], font=metric_font, fill=black)
-    draw.text((metric_x, 112), "湿度 %d%%" % weather["humidity"], font=metric_font, fill=black)
-    draw.text((12, 130), "降水 %d%%" % weather.get("rain_probability", 0), font=metric_font, fill=black)
-    draw.text((metric_x, 130), "风力 %d级" % wind_level(weather.get("wind_speed", 0)), font=metric_font, fill=black)
+    if weather.get("forecast"):
+        draw.text((12, 112), "次日预报", font=metric_font, fill=black)
+        draw.text((metric_x, 112), "降水 %d%%" % weather.get("rain_probability", 0), font=metric_font, fill=black)
+    else:
+        draw.text((12, 112), "体感 %d℃" % weather["feels"], font=metric_font, fill=black)
+        draw.text((metric_x, 112), "湿度 %d%%" % weather["humidity"], font=metric_font, fill=black)
+    if weather.get("forecast"):
+        draw.text((12, 130), "%d~%d℃" % (weather["low"], weather["high"]), font=metric_font, fill=black)
+    else:
+        draw.text((12, 130), "降水 %d%%" % weather.get("rain_probability", 0), font=metric_font, fill=black)
+        draw.text((metric_x, 130), "风力 %d级" % wind_level(weather.get("wind_speed", 0)), font=metric_font, fill=black)
     # Leave a clear gap below the metrics; the chart title used to overlap the wind row.
     draw_temperature_chart(draw, 16, 157, 168, 48, weather, f_tiny)
     draw.rounded_rectangle((10, 230, 190, 292), radius=4, fill=white, outline=0, width=1)
-    draw.text((16, 234), "穿搭推荐", font=f_body, fill=black)
+    draw.text((16, 234), "明日穿搭" if weather.get("forecast") else "穿搭推荐", font=f_body, fill=black)
     clothing = "早晚温差较大，建议长袖/薄卫衣搭配薄外套"
     if weather["low"] <= 8:
         clothing = "气温偏低，建议保暖外套，早晚注意防风"
@@ -436,7 +442,7 @@ def render(config, date, data, output):
     # Right column: calendar, five-element colors, and yi/ji.
     rx = 211
     draw.rounded_rectangle((208, 32, 390, 292), radius=4, fill=white, outline=0, width=1)
-    draw.text((rx, 35), "今日黄历", font=f_body, fill=black)
+    draw.text((rx, 35), "明日黄历" if weather.get("forecast") else "今日黄历", font=f_body, fill=black)
     draw.text((388, 37), fit_width(holiday.get("label", "日期信息未知"), f_tiny, 90), font=f_tiny, fill=black, anchor="ra")
     draw.text((rx, 55), fit_width("农历 " + calendar.get("lunar", "数据暂不可用"), f_tiny, 169), font=f_tiny, fill=black)
     draw.text((rx, 70), fit_width("节气 " + (calendar.get("term") or "无"), f_tiny, 169), font=f_tiny, fill=black)
@@ -497,7 +503,8 @@ def main():
     date = dt.date.fromisoformat(args.date) if args.date else dt.date.today()
     target_date = date + dt.timedelta(days=1) if args.tomorrow else date
     if args.offline_sample:
-        data = sample_data(config, date)
+        data = sample_data(config, target_date)
+        data["weather"]["forecast"] = args.tomorrow
     else:
         data = {
             "weather": safe_fetch(lambda: fetch_weather(config, date, tomorrow=args.tomorrow), {"condition": "天气暂不可用", "code": 0, "current": 0, "feels": 0, "humidity": 0, "high": 0, "low": 0, "rain_probability": 0, "wind_speed": 0, "wind_direction": 0}),

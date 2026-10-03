@@ -4,6 +4,7 @@ set -eu
 PROJECT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 PYTHON="${ZECTRIX_PYTHON:-$PROJECT_DIR/.venv/bin/python}"
 OUTPUT="${ZECTRIX_OUTPUT:-/tmp/zectrix-morning-brief.png}"
+export TZ="${ZECTRIX_TIMEZONE:-Asia/Shanghai}"
 HOUR="$(date +%H)"
 
 if [ ! -x "$PYTHON" ]; then

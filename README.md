@@ -113,6 +113,130 @@ ZECTRIX_NO_PUSH=1 .venv/bin/python scripts/morning_brief.py --tomorrow
 
 不要把 `~/.config/zectrix-morning-brief/config.json` 写入任务参数、仓库或日志。
 
+## 部署到 Hermes Agent VPS
+
+插件运行在 VPS 上，NOTE4 不需要安装 Python。VPS 需要满足：
+
+- 能访问 Zectrix Cloud、Open-Meteo、Timor API 和全民万年历
+- 服务器持续运行，不能在计划时间休眠
+- 使用与设备所在地区一致的时区；脚本默认使用 `Asia/Shanghai`
+- 已安装 Python 3、`venv` 和 Git
+
+### 1. 下载并安装
+
+以普通用户登录 VPS，建议不要使用 root 运行：
+
+```bash
+mkdir -p ~/services
+cd ~/services
+git clone https://github.com/happynailinzz/zectrix-morning-brief.git
+cd zectrix-morning-brief
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+chmod +x scripts/run_scheduled.sh
+```
+
+### 2. 初始化设备配置
+
+在 VPS 上执行一次初始化。API Key 不要写入 shell 历史，推荐省略命令行参数，让程序安全读取输入：
+
+```bash
+.venv/bin/python scripts/init.py
+```
+
+按提示输入 API Key、设备 ID/MAC、城市和页面号。配置会写入：
+
+```text
+~/.config/zectrix-morning-brief/config.json
+```
+
+检查权限：
+
+```bash
+chmod 700 ~/.config/zectrix-morning-brief
+chmod 600 ~/.config/zectrix-morning-brief/config.json
+```
+
+不要把配置放到 Git 仓库、Hermes 任务参数、公开环境变量或日志中。
+
+### 3. Hermes Agent 配置
+
+在 Hermes 中创建本地 `no_agent` 任务，让 Hermes 只负责调度，脚本负责取数、渲染和上传。任务命令使用 VPS 上的绝对路径：
+
+```bash
+/home/你的用户名/services/zectrix-morning-brief/scripts/run_scheduled.sh
+```
+
+调度表达式使用每小时整点：
+
+```text
+0 * * * *
+```
+
+脚本只会在 `07:00`、`16:00` 和 `21:00` 执行，其余整点直接退出，不会访问数据源。`21:00` 自动使用 `--tomorrow`，推送次日天气预报和次日黄历。
+
+不同 Hermes 版本的 cron 创建命令可能不同，先在 VPS 上查看：
+
+```bash
+hermes cron --help
+```
+
+### 4. 不使用 Hermes 时的 cron
+
+VPS 也可以直接使用系统 cron。编辑当前用户的 crontab：
+
+```bash
+crontab -e
+```
+
+添加：
+
+```cron
+CRON_TZ=Asia/Shanghai
+0 * * * * /home/你的用户名/services/zectrix-morning-brief/scripts/run_scheduled.sh >> /tmp/zectrix-morning-brief.log 2>&1
+```
+
+或者只在三个时段调用：
+
+```cron
+CRON_TZ=Asia/Shanghai
+0 7,16,21 * * * /home/你的用户名/services/zectrix-morning-brief/scripts/run_scheduled.sh >> /tmp/zectrix-morning-brief.log 2>&1
+```
+
+日志只应记录运行状态和数据源错误，不应记录 `config.json` 或 API Key。检查最近日志：
+
+```bash
+tail -n 100 /tmp/zectrix-morning-brief.log
+```
+
+### 5. VPS 上线前测试
+
+先做离线渲染，再做真实数据但不推送，最后确认上传：
+
+```bash
+cd ~/services/zectrix-morning-brief
+
+# 不联网、不上传
+.venv/bin/python scripts/morning_brief.py --offline-sample --output /tmp/morning-sample.png
+
+# 抓取当天数据，但不上传
+ZECTRIX_NO_PUSH=1 .venv/bin/python scripts/morning_brief.py --output /tmp/morning-today.png
+
+# 抓取次日天气和黄历，但不上传
+ZECTRIX_NO_PUSH=1 .venv/bin/python scripts/morning_brief.py --tomorrow --output /tmp/morning-tomorrow.png
+
+# 确认无误后才执行真实上传
+.venv/bin/python scripts/morning_brief.py
+```
+
+检查 VPS 当前时区和脚本计划小时：
+
+```bash
+ZECTRIX_TIMEZONE=Asia/Shanghai scripts/run_scheduled.sh
+```
+
+最后一条命令在非计划时段只会输出“跳过”，不会抓取或上传。
+
 ## 数据来源
 
 - 天气、日出日落和逐小时温度：[Open-Meteo](https://open-meteo.com/)
