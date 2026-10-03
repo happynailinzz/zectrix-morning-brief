@@ -70,15 +70,21 @@ class TextParser(HTMLParser):
                 self.parts.append(alt)
 
 
-def fetch_json(url):
+def fetch_json(url, timeout=20):
     request = urllib.request.Request(url, headers={"User-Agent": "zectrix-morning-brief/1.0"})
-    with urllib.request.urlopen(request, timeout=20) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
 def fetch_text(url):
-    request = urllib.request.Request(url, headers={"User-Agent": "zectrix-morning-brief/1.0"})
-    with urllib.request.urlopen(request, timeout=20) as response:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "zectrix-morning-brief/1.0",
+            "Accept": "text/html,application/xhtml+xml",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
         raw = response.read().decode("utf-8", "ignore")
     parser = TextParser()
     parser.feed(raw)
