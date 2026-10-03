@@ -111,38 +111,49 @@ def load_config(allow_sample=False):
         return json.load(handle)
 
 
-def fetch_weather(config, date):
+def fetch_weather(config, date, tomorrow=False):
     location = config["location"]
     params = {
         "latitude": location["lat"],
         "longitude": location["lon"],
         "timezone": location.get("timezone", "Asia/Shanghai"),
-        "forecast_days": 1,
-        "current": "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m,is_day",
+        "forecast_days": 2 if tomorrow else 1,
         "daily": "temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset",
         "hourly": "temperature_2m",
     }
+    if not tomorrow:
+        params["current"] = "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m,is_day"
     data = fetch_json("https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode(params))
     current = data.get("current", {})
     daily = data.get("daily", {})
     hourly = data.get("hourly", {})
-    code = int(current.get("weather_code", (daily.get("weather_code") or [0])[0]))
+    index = 1 if tomorrow else 0
+    code = int((daily.get("weather_code") or [0])[index])
+    if not tomorrow:
+        code = int(current.get("weather_code", code))
+    hourly = hourly.get("temperature_2m") or []
+    hourly_values = hourly[index * 24:(index + 1) * 24]
+    high = round(float((daily.get("temperature_2m_max") or [0])[index]))
+    low = round(float((daily.get("temperature_2m_min") or [0])[index]))
+    if tomorrow:
+        current = {"temperature_2m": high, "apparent_temperature": high, "relative_humidity_2m": 0, "wind_speed_10m": 0, "wind_direction_10m": 0, "is_day": 1}
     return {
         "condition": WEATHER.get(code, "未知"),
         "code": code,
         "current": round(float(current.get("temperature_2m", 0))),
         "feels": round(float(current.get("apparent_temperature", 0))),
         "humidity": round(float(current.get("relative_humidity_2m", 0))),
-        "high": round(float((daily.get("temperature_2m_max") or [0])[0])),
-        "low": round(float((daily.get("temperature_2m_min") or [0])[0])),
-        "rain_probability": int((daily.get("precipitation_probability_max") or [0])[0] or 0),
+        "high": high,
+        "low": low,
+        "rain_probability": int((daily.get("precipitation_probability_max") or [0])[index] or 0),
         "wind_speed": round(float(current.get("wind_speed_10m", 0))),
         "wind_direction": int(current.get("wind_direction_10m", 0) or 0),
         "is_day": bool(current.get("is_day", 1)),
-        "sunrise": (daily.get("sunrise") or [""])[0].split("T")[-1][:5],
-        "sunset": (daily.get("sunset") or [""])[0].split("T")[-1][:5],
-        "hourly_temperatures": [round(float(value)) for value in (hourly.get("temperature_2m") or [])[:24]],
-        "date": (daily.get("time") or [date.isoformat()])[0],
+        "sunrise": (daily.get("sunrise") or [""])[index].split("T")[-1][:5],
+        "sunset": (daily.get("sunset") or [""])[index].split("T")[-1][:5],
+        "hourly_temperatures": [round(float(value)) for value in hourly_values],
+        "date": (daily.get("time") or [date.isoformat()])[index],
+        "forecast": tomorrow,
     }
 
 
@@ -395,7 +406,7 @@ def render(config, date, data, output):
 
     # Left column: glanceable weather and clothing information.
     draw.rounded_rectangle((10, 32, 190, 225), radius=4, fill=white, outline=0, width=1)
-    draw.text((12, 35), "当前天气", font=f_body, fill=black)
+    draw.text((12, 35), "明日天气" if weather.get("forecast") else "当前天气", font=f_body, fill=black)
     draw_weather_icon(image, 148, 68, weather.get("code", 0), weather.get("is_day", True))
     draw.text((12, 58), "%d℃" % weather["current"], font=font(34), fill=black)
     condition = str(weather.get("condition", ""))
@@ -480,18 +491,20 @@ def main():
     parser.add_argument("--output", default="/tmp/zectrix-morning-brief.png")
     parser.add_argument("--date", help="固定日期 YYYY-MM-DD，用于调试")
     parser.add_argument("--offline-sample", action="store_true")
+    parser.add_argument("--tomorrow", action="store_true", help="显示并抓取次日天气和黄历")
     args = parser.parse_args()
     config = load_config(allow_sample=args.offline_sample)
     date = dt.date.fromisoformat(args.date) if args.date else dt.date.today()
+    target_date = date + dt.timedelta(days=1) if args.tomorrow else date
     if args.offline_sample:
         data = sample_data(config, date)
     else:
         data = {
-            "weather": safe_fetch(lambda: fetch_weather(config, date), {"condition": "天气暂不可用", "code": 0, "current": 0, "feels": 0, "humidity": 0, "high": 0, "low": 0, "rain_probability": 0, "wind_speed": 0, "wind_direction": 0}),
-            "holiday": safe_fetch(lambda: parse_holiday(date), {"label": "节假日数据暂不可用", "off": False}),
-            "calendar": safe_fetch(lambda: parse_qmrl(date), {"lunar": "黄历数据暂不可用", "colors": {}, "yi": [], "ji": []}),
+            "weather": safe_fetch(lambda: fetch_weather(config, date, tomorrow=args.tomorrow), {"condition": "天气暂不可用", "code": 0, "current": 0, "feels": 0, "humidity": 0, "high": 0, "low": 0, "rain_probability": 0, "wind_speed": 0, "wind_direction": 0}),
+            "holiday": safe_fetch(lambda: parse_holiday(target_date), {"label": "节假日数据暂不可用", "off": False}),
+            "calendar": safe_fetch(lambda: parse_qmrl(target_date), {"lunar": "黄历数据暂不可用", "colors": {}, "yi": [], "ji": []}),
         }
-    render(config, date, data, args.output)
+    render(config, target_date, data, args.output)
     print("saved %s" % args.output)
     if os.environ.get("ZECTRIX_NO_PUSH") != "1" and not args.offline_sample:
         push(config, args.output)

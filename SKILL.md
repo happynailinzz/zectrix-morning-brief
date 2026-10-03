@@ -21,6 +21,14 @@ python3 scripts/init.py
 python3 scripts/morning_brief.py
 ```
 
+三时段自动运行：
+
+```bash
+./scripts/run_scheduled.sh
+```
+
+`07:00` 和 `16:00` 抓取当天数据，`21:00` 使用 `--tomorrow` 抓取次日天气预报和黄历。
+
 只预览不推送：
 
 ```bash

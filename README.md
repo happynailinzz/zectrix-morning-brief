@@ -77,22 +77,38 @@ Cloud API 返回 `PUSH pageId=1 OK` 表示平台接受了请求。设备是拉�
 
 ## 定时运行
 
-项目提供单次执行脚本，适合交给 Hermes、cron 或 macOS launchd：
+项目提供三时段执行脚本，每天运行三次：
+
+- `07:00`：实时抓取当天当前天气和当天黄历
+- `16:00`：再次实时抓取当天当前天气和当天黄历
+- `21:00`：抓取次日天气预报和次日黄历
 
 ```bash
-./scripts/run_hourly.sh
+./scripts/run_scheduled.sh
 ```
 
 脚本默认使用项目内 `.venv/bin/python`，可通过环境变量覆盖解释器和输出路径：
 
 ```bash
-ZECTRIX_PYTHON=/path/to/python ZECTRIX_OUTPUT=/tmp/morning.png ./scripts/run_hourly.sh
+ZECTRIX_PYTHON=/path/to/python ZECTRIX_OUTPUT=/tmp/morning.png ./scripts/run_scheduled.sh
 ```
 
-Hermes 每小时整点可使用：
+Hermes 或 cron 可每小时调用一次，脚本只会在三个目标小时执行：
 
 ```text
 0 * * * *
+```
+
+也可以使用 cron 只在目标时间调用：
+
+```cron
+0 7,16,21 * * * /path/to/zectrix-morning-brief/scripts/run_scheduled.sh
+```
+
+晚上模式手动测试：
+
+```bash
+ZECTRIX_NO_PUSH=1 .venv/bin/python scripts/morning_brief.py --tomorrow
 ```
 
 不要把 `~/.config/zectrix-morning-brief/config.json` 写入任务参数、仓库或日志。
