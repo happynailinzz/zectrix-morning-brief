@@ -1,0 +1,11 @@
+<svg viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Wind">
+<path d="M24 50H84a20 20 0 1 0 20-20" stroke="#000000" stroke-width="4" stroke-linecap="round"/>
+<path d="M24 80H78a20 20 0 1 1 20 20" stroke="#000000" stroke-width="4" stroke-linecap="round"/>
+</g>
+<g id="Snow">
+<circle cx="98" cy="44" r="7" fill="#000000"/>
+<circle cx="104" cy="74" r="5" fill="#000000"/>
+<circle cx="94" cy="102" r="6" fill="#000000"/>
+</g>
+</svg>
