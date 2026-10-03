@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -84,12 +85,17 @@ def fetch_text(url):
     return "\n".join(parser.parts)
 
 
-def safe_fetch(function, default):
-    try:
-        return function()
-    except (OSError, ValueError, KeyError, urllib.error.URLError) as error:
-        print("WARN: 数据源失败：%s" % error, file=sys.stderr)
-        return default
+def safe_fetch(source, function, default, attempts=2):
+    for attempt in range(1, attempts + 1):
+        try:
+            return function()
+        except (OSError, ValueError, KeyError, urllib.error.URLError) as error:
+            if attempt == attempts:
+                print("WARN: 数据源失败 [%s]（已重试%d次）：%s" % (source, attempts - 1, error), file=sys.stderr)
+            else:
+                print("WARN: 数据源暂时失败 [%s]，%d秒后重试：%s" % (source, 2, error), file=sys.stderr)
+                time.sleep(2)
+    return default
 
 
 def load_config(allow_sample=False):
@@ -507,9 +513,9 @@ def main():
         data["weather"]["forecast"] = args.tomorrow
     else:
         data = {
-            "weather": safe_fetch(lambda: fetch_weather(config, date, tomorrow=args.tomorrow), {"condition": "天气暂不可用", "code": 0, "current": 0, "feels": 0, "humidity": 0, "high": 0, "low": 0, "rain_probability": 0, "wind_speed": 0, "wind_direction": 0}),
-            "holiday": safe_fetch(lambda: parse_holiday(target_date), {"label": "节假日数据暂不可用", "off": False}),
-            "calendar": safe_fetch(lambda: parse_qmrl(target_date), {"lunar": "黄历数据暂不可用", "colors": {}, "yi": [], "ji": []}),
+            "weather": safe_fetch("Open-Meteo天气", lambda: fetch_weather(config, date, tomorrow=args.tomorrow), {"condition": "天气暂不可用", "code": 0, "current": 0, "feels": 0, "humidity": 0, "high": 0, "low": 0, "rain_probability": 0, "wind_speed": 0, "wind_direction": 0}),
+            "holiday": safe_fetch("Timor节假日", lambda: parse_holiday(target_date), {"label": "节假日数据暂不可用", "off": False}),
+            "calendar": safe_fetch("全民万年历黄历", lambda: parse_qmrl(target_date), {"lunar": "黄历数据暂不可用", "colors": {}, "yi": [], "ji": []}),
         }
     render(config, target_date, data, args.output)
     print("saved %s" % args.output)
