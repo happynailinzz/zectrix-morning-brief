@@ -223,6 +223,18 @@ def between(text, start, end=None):
     return text[begin:finish if finish >= 0 else len(text)]
 
 
+ZODIAC_CHARS = "鼠牛虎兔龙蛇马羊猴鸡狗猪"
+
+
+def compact_lunar(raw):
+    """Keep the full lunar 年月日 but drop the zodiac token (e.g. 马年) and the
+    trailing solar-term annotation (e.g. （寒露）) that the source appends."""
+    value = re.sub(r"（[^（）]*节气[^（）]*）|（\s*[^（）]*\s*）\s*$", " ", str(raw or ""))
+    tokens = [token for token in value.split()
+              if not (len(token) == 2 and token.endswith("年") and token[0] in ZODIAC_CHARS)]
+    return " ".join(tokens).strip()
+
+
 def first_match(pattern, text, default=""):
     match = re.search(pattern, text, re.S)
     return re.sub(r"\s+", " ", match.group(1)).strip() if match else default
@@ -230,7 +242,7 @@ def first_match(pattern, text, default=""):
 
 def parse_qmrl(date):
     text = fetch_text(QMRL.format(year=date.year, month=date.month, day=date.day))
-    lunar = first_match(r"农历\s+([^\n]+)", text, "数据暂不可用")
+    lunar = compact_lunar(first_match(r"农历\s+([^\n]+)", text, "数据暂不可用"))
     ganzhi = first_match(r"(\S+年（[^\n]+?\）\S+月（[^\n]+?\）\S+日（[^\n]+?\）)", text, "")
     day_pillar = first_match(r"([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥])日", text, "")
     wuxing = first_match(r"五行：(.+?)(?:建执位|\n)", text, "")
@@ -238,8 +250,8 @@ def parse_qmrl(date):
     build_day = first_match(r"黄道吉日是[“\"]?([^”\"，。]+)", text, "")
     yi_block = between(text, "\n宜\n", "\n胎神")
     ji_block = between(text, "\n忌\n", "\n五行")
-    yi = split_items(yi_block)
-    ji = split_items(ji_block)
+    yi = split_items(yi_block, limit=12)
+    ji = split_items(ji_block, limit=12)
     colors = parse_colors(text)
     event = first_match(r"公历\s+[^\n]+\n\n?[^\n]*（[^）]+）", text, "")
     previous_term, next_term = solar_term_pair(text, date)
@@ -297,13 +309,13 @@ def next_solar_term(text, date):
     return "无"
 
 
-def split_items(block):
+def split_items(block, limit=6):
     items = []
     for line in block.splitlines():
         line = re.sub(r"^[\-•·\s]+", "", line).strip()
         if line and len(line) <= 24 and line not in items:
             items.append(line)
-    return items[:6]
+    return items[:limit]
 
 
 def parse_colors(text):
@@ -526,22 +538,24 @@ def render(config, date, data, output):
     draw.text((rx, 136), "五行穿衣", font=f_body, fill=black)
     color_rows = [("贵", "贵人色"), ("合", "合作色"), ("财", "进财色"), ("耗", "消耗色"), ("忌", "不利色")]
     for index, (prefix, key) in enumerate(color_rows):
-        y = 155 + index * 13
+        y = 154 + index * 11
         values = "、".join(calendar.get("colors", {}).get(key, [])) or "数据暂不可用"
         shade = (65, 120, 170, 205, 235)[index]
         draw.rounded_rectangle((rx, y - 1, rx + 12, y + 9), radius=2, fill=shade, outline=80, width=1)
         draw.text((rx + 5, y - 1), prefix, font=f_tiny, fill=255 if index < 2 else black, anchor="ma")
         draw.text((rx + 18, y), fit_width(values, f_tiny, 151), font=f_tiny, fill=black)
-    draw.line((rx, 224, 388, 224), fill=black, width=1)
+    draw.line((rx, 212, 388, 212), fill=black, width=1)
 
     yi = "、".join(calendar.get("yi", [])) or "数据暂不可用"
     ji = "、".join(calendar.get("ji", [])) or "数据暂不可用"
-    draw.text((rx, 238), "宜", font=f_body, fill=black)
-    for index, line in enumerate(wrap_by_width(draw, yi, f_tiny, 151, 2)):
-        draw.text((rx + 22, 241 + index * 12), line, font=f_tiny, fill=black)
-    draw.text((rx, 262), "忌", font=f_body, fill=black)
-    for index, line in enumerate(wrap_by_width(draw, ji, f_tiny, 151, 2)):
-        draw.text((rx + 22, 265 + index * 12), line, font=f_tiny, fill=black)
+    draw.text((rx, 216), "宜", font=f_body, fill=black)
+    yi_lines = wrap_by_width(draw, yi, f_tiny, 151, 3)
+    for index, line in enumerate(yi_lines):
+        draw.text((rx + 22, 227 + index * 10), line, font=f_tiny, fill=black)
+    draw.text((rx, 260), "忌", font=f_body, fill=black)
+    ji_lines = wrap_by_width(draw, ji, f_tiny, 151, 2)
+    for index, line in enumerate(ji_lines):
+        draw.text((rx + 22, 271 + index * 10), line, font=f_tiny, fill=black)
     # NOTE4 is a 1BPP panel. Quantize once here so the cloud does not dither
     # already-antialiased text a second time and soften its strokes.
     one_bpp = image.point(lambda value: 0 if value < ONE_BPP_THRESHOLD else 255, mode="1")
