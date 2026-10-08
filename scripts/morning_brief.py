@@ -538,24 +538,23 @@ def render(config, date, data, output):
     draw.text((rx, 136), "五行穿衣", font=f_body, fill=black)
     color_rows = [("贵", "贵人色"), ("合", "合作色"), ("财", "进财色"), ("耗", "消耗色"), ("忌", "不利色")]
     for index, (prefix, key) in enumerate(color_rows):
-        y = 154 + index * 11
+        y = 152 + index * 14
         values = "、".join(calendar.get("colors", {}).get(key, [])) or "数据暂不可用"
         shade = (65, 120, 170, 205, 235)[index]
         draw.rounded_rectangle((rx, y - 1, rx + 12, y + 9), radius=2, fill=shade, outline=80, width=1)
         draw.text((rx + 5, y - 1), prefix, font=f_tiny, fill=255 if index < 2 else black, anchor="ma")
         draw.text((rx + 18, y), fit_width(values, f_tiny, 151), font=f_tiny, fill=black)
-    draw.line((rx, 212, 388, 212), fill=black, width=1)
+    # Align the 五行穿衣 lower edge with the left weather card's bottom (y=225).
+    draw.line((rx, 224, 388, 224), fill=black, width=1)
 
     yi = "、".join(calendar.get("yi", [])) or "数据暂不可用"
     ji = "、".join(calendar.get("ji", [])) or "数据暂不可用"
-    draw.text((rx, 216), "宜", font=f_body, fill=black)
-    yi_lines = wrap_by_width(draw, yi, f_tiny, 151, 3)
-    for index, line in enumerate(yi_lines):
-        draw.text((rx + 22, 227 + index * 10), line, font=f_tiny, fill=black)
-    draw.text((rx, 260), "忌", font=f_body, fill=black)
-    ji_lines = wrap_by_width(draw, ji, f_tiny, 151, 2)
-    for index, line in enumerate(ji_lines):
-        draw.text((rx + 22, 271 + index * 10), line, font=f_tiny, fill=black)
+    draw.text((rx, 229), "宜", font=f_body, fill=black)
+    for index, line in enumerate(wrap_by_width(draw, yi, f_tiny, 151, 2)):
+        draw.text((rx + 22, 240 + index * 10), line, font=f_tiny, fill=black)
+    draw.text((rx, 261), "忌", font=f_body, fill=black)
+    for index, line in enumerate(wrap_by_width(draw, ji, f_tiny, 151, 2)):
+        draw.text((rx + 22, 272 + index * 10), line, font=f_tiny, fill=black)
     # NOTE4 is a 1BPP panel. Quantize once here so the cloud does not dither
     # already-antialiased text a second time and soften its strokes.
     one_bpp = image.point(lambda value: 0 if value < ONE_BPP_THRESHOLD else 255, mode="1")
