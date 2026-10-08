@@ -532,16 +532,16 @@ def render(config, date, data, output):
         draw.rounded_rectangle((rx, y - 1, rx + 12, y + 9), radius=2, fill=shade, outline=80, width=1)
         draw.text((rx + 5, y - 1), prefix, font=f_tiny, fill=255 if index < 2 else black, anchor="ma")
         draw.text((rx + 18, y), fit_width(values, f_tiny, 151), font=f_tiny, fill=black)
-    draw.line((rx, 215, 388, 215), fill=black, width=1)
+    draw.line((rx, 224, 388, 224), fill=black, width=1)
 
     yi = "、".join(calendar.get("yi", [])) or "数据暂不可用"
     ji = "、".join(calendar.get("ji", [])) or "数据暂不可用"
-    draw.text((rx, 220), "宜", font=f_body, fill=black)
+    draw.text((rx, 238), "宜", font=f_body, fill=black)
     for index, line in enumerate(wrap_by_width(draw, yi, f_tiny, 151, 2)):
-        draw.text((rx + 22, 223 + index * 12), line, font=f_tiny, fill=black)
-    draw.text((rx, 250), "忌", font=f_body, fill=black)
+        draw.text((rx + 22, 241 + index * 12), line, font=f_tiny, fill=black)
+    draw.text((rx, 262), "忌", font=f_body, fill=black)
     for index, line in enumerate(wrap_by_width(draw, ji, f_tiny, 151, 2)):
-        draw.text((rx + 22, 253 + index * 12), line, font=f_tiny, fill=black)
+        draw.text((rx + 22, 265 + index * 12), line, font=f_tiny, fill=black)
     # NOTE4 is a 1BPP panel. Quantize once here so the cloud does not dither
     # already-antialiased text a second time and soften its strokes.
     one_bpp = image.point(lambda value: 0 if value < ONE_BPP_THRESHOLD else 255, mode="1")
