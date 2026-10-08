@@ -453,20 +453,21 @@ def render(config, date, data, output):
     draw.text((12, 58), "%d℃" % weather["current"], font=font(34), fill=black)
     condition = str(weather.get("condition", ""))
     range_prefix = "%d~%d℃  " % (weather["low"], weather["high"])
-    draw.text((12, 94), range_prefix + condition, font=f_small, fill=black)
-    # Use one compact two-column grid so all four metrics share the same rhythm.
+    # Keep the three left-side metric rows aligned and clear of the card border.
+    content_x = 16
+    draw.text((content_x, 94), range_prefix + condition, font=f_small, fill=black)
     metric_font = f_tiny
-    metric_x = round(12 + draw.textlength(range_prefix + condition[:-1], font=f_small))
+    metric_x = 104
     if weather.get("forecast"):
-        draw.text((12, 112), "次日预报", font=metric_font, fill=black)
+        draw.text((content_x, 112), "次日预报", font=metric_font, fill=black)
         draw.text((metric_x, 112), "降水 %d%%" % weather.get("rain_probability", 0), font=metric_font, fill=black)
     else:
-        draw.text((12, 112), "AQI %d" % weather.get("aqi", 0), font=metric_font, fill=black)
-        draw.text((metric_x, 112), "PM2.5 %.1f" % weather.get("pm25", 0), font=metric_font, fill=black)
+        draw.text((content_x, 112), "AQI %d" % weather.get("aqi", 0), font=metric_font, fill=black)
+        draw.text((metric_x, 112), "湿度 %d%%" % weather.get("humidity", 0), font=metric_font, fill=black)
     if weather.get("forecast"):
-        draw.text((12, 130), "%d~%d℃" % (weather["low"], weather["high"]), font=metric_font, fill=black)
+        draw.text((content_x, 130), "%d~%d℃" % (weather["low"], weather["high"]), font=metric_font, fill=black)
     else:
-        draw.text((12, 130), "降水 %d%%" % weather.get("rain_probability", 0), font=metric_font, fill=black)
+        draw.text((content_x, 130), "降水 %d%%" % weather.get("rain_probability", 0), font=metric_font, fill=black)
         draw.text((metric_x, 130), "风力 %d级" % wind_level(weather.get("wind_speed", 0)), font=metric_font, fill=black)
     # Leave a clear gap below the metrics; the chart title used to overlap the wind row.
     draw_temperature_chart(draw, 16, 157, 168, 48, weather, f_tiny)
