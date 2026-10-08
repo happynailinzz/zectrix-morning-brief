@@ -252,9 +252,10 @@ def parse_qmrl(date):
     ji_block = between(text, "\n忌\n", "\n五行")
     yi = split_items(yi_block, limit=12)
     ji = split_items(ji_block, limit=12)
-    # Prefer self-computed 五行生克 colors (matches the day's Nayin element);
-    # fall back to the source page's list if the element cannot be identified.
-    colors = compute_colors(wuxing, fallback=parse_colors(text))
+    # Prefer self-computed 五行生克 colors keyed on the day pillar's Nayin
+    # element (cross-checked against the source page); fall back to the
+    # source's own list if the pillar cannot be resolved.
+    colors = compute_clothing(day_pillar, wuxing, fallback=parse_colors(text))
     event = first_match(r"公历\s+[^\n]+\n\n?[^\n]*（[^）]+）", text, "")
     previous_term, next_term = solar_term_pair(text, date)
     if previous_term == "无" and next_term == "无":
@@ -355,11 +356,67 @@ def wuxing_element(wuxing):
     return ""
 
 
+# The 30 Nayin pairs in 60-Jiazi order. The day pillar (日柱) is the
+# authoritative source of the day's element: we compute the Nayin from the
+# pillar rather than scraping a character off the source string, so a garbled
+# source read can never corrupt the clothing-color derivation.
+GAN = "甲乙丙丁戊己庚辛壬癸"
+ZHI = "子丑寅卯辰巳午未申酉戌亥"
+NAYIN = [
+    "海中金", "炉中火", "大林木", "路旁土", "剑锋金", "山头火",
+    "涧下水", "城头土", "白蜡金", "杨柳木", "泉中水", "屋上土",
+    "霹雳火", "松柏木", "长流水", "砂石金", "山下火", "平地木",
+    "壁上土", "金箔金", "覆灯火", "天河水", "大驿土", "钗钏金",
+    "桑柘木", "大溪水", "沙中土", "天上火", "石榴木", "大海水",
+]
+
+
+def nayin_element(day_pillar):
+    """Return the Nayin element for a day pillar (e.g. '丙辰' -> '土'),
+    or '' when the pillar cannot be resolved."""
+    pillar = str(day_pillar or "")[:2]
+    if len(pillar) != 2 or pillar[0] not in GAN or pillar[1] not in ZHI:
+        return ""
+    for n in range(60):
+        if n % 10 == GAN.index(pillar[0]) and n % 12 == ZHI.index(pillar[1]):
+            return NAYIN[n // 2][-1]
+    return ""
+
+
+def day_element(day_pillar, source_wuxing=""):
+    """Nayin element computed from the day pillar, cross-checked against the
+    source page's Nayin. Prefers the pillar-derived value; falls back to the
+    source string when the pillar is missing."""
+    element = nayin_element(day_pillar)
+    if element:
+        return element
+    return wuxing_element(source_wuxing)
+
+
 def compute_colors(wuxing, fallback=None):
     """Build the five clothing buckets from the day's Nayin element."""
     element = wuxing_element(wuxing)
     if not element:
         return fallback or {}
+    return {
+        "贵人色": ELEMENT_COLORS[GENERATE[element]],
+        "合作色": ELEMENT_COLORS[element],
+        "进财色": ELEMENT_COLORS[OVERCOME_BY[element]],
+        "消耗色": ELEMENT_COLORS[GENERATE_BY[element]],
+        "不利色": ELEMENT_COLORS[OVERCOME[element]],
+    }
+
+
+def compute_clothing(day_pillar, source_wuxing="", fallback=None):
+    """Derive the five clothing buckets from the day pillar's Nayin element,
+    then cross-check that element against the source page's Nayin."""
+    element = day_element(day_pillar, source_wuxing)
+    if not element:
+        return fallback or {}
+    source_element = wuxing_element(source_wuxing)
+    if source_element and source_element != element:
+        print("WARN: 日柱%s纳音五行[%s] 与信息源[%s] 不一致，采用日柱"
+              % (day_pillar, element, source_element), file=sys.stderr)
     return {
         "贵人色": ELEMENT_COLORS[GENERATE[element]],
         "合作色": ELEMENT_COLORS[element],
