@@ -252,7 +252,9 @@ def parse_qmrl(date):
     ji_block = between(text, "\n忌\n", "\n五行")
     yi = split_items(yi_block, limit=12)
     ji = split_items(ji_block, limit=12)
-    colors = parse_colors(text)
+    # Prefer self-computed 五行生克 colors (matches the day's Nayin element);
+    # fall back to the source page's list if the element cannot be identified.
+    colors = compute_colors(wuxing, fallback=parse_colors(text))
     event = first_match(r"公历\s+[^\n]+\n\n?[^\n]*（[^）]+）", text, "")
     previous_term, next_term = solar_term_pair(text, date)
     if previous_term == "无" and next_term == "无":
@@ -330,6 +332,43 @@ def parse_colors(text):
     return result
 
 
+# Five-element clothing colors are derived by 相生相克 from the day's element
+# (the day's Nayin, e.g. 沙中土 -> 土), not read from the source page.
+# Buckets: 贵人=我生, 合作=比和(我), 进财=克我(奋斗色), 消耗=生我, 不利=我克.
+GENERATE = {"木": "火", "火": "土", "土": "金", "金": "水", "水": "木"}
+OVERCOME = {"木": "土", "土": "水", "水": "火", "火": "金", "金": "木"}
+GENERATE_BY = {"火": "木", "土": "火", "金": "土", "水": "金", "木": "水"}
+OVERCOME_BY = {"土": "木", "水": "土", "火": "水", "金": "火", "木": "金"}
+ELEMENT_COLORS = {
+    "木": ["绿色", "青色"],
+    "火": ["红色", "粉色", "橙色"],
+    "土": ["黄色", "咖啡色"],
+    "金": ["白色", "银色"],
+    "水": ["黑色", "蓝色", "灰色"],
+}
+
+
+def wuxing_element(wuxing):
+    for element in "木火土金水":
+        if element in str(wuxing or ""):
+            return element
+    return ""
+
+
+def compute_colors(wuxing, fallback=None):
+    """Build the five clothing buckets from the day's Nayin element."""
+    element = wuxing_element(wuxing)
+    if not element:
+        return fallback or {}
+    return {
+        "贵人色": ELEMENT_COLORS[GENERATE[element]],
+        "合作色": ELEMENT_COLORS[element],
+        "进财色": ELEMENT_COLORS[OVERCOME_BY[element]],
+        "消耗色": ELEMENT_COLORS[GENERATE_BY[element]],
+        "不利色": ELEMENT_COLORS[OVERCOME[element]],
+    }
+
+
 def sample_data(config, date):
     return {
         "weather": {"condition": "多云转阴", "code": 3, "current": 20, "feels": 18, "humidity": 30, "high": 22, "low": 14, "rain_probability": 10, "wind_speed": 3, "wind_direction": 45, "sunrise": "06:18", "sunset": "18:08", "is_day": True, "hourly_temperatures": [15, 15, 14, 14, 15, 17, 19, 20, 21, 22, 22, 21, 20, 19, 18, 17, 16, 16, 15, 15, 14, 14, 14, 14], "aqi": 75, "pm25": 18.2, "pm10": 35.6, "level": "良"},
@@ -339,7 +378,7 @@ def sample_data(config, date):
             "wuxing": "大驿土", "value_god": "玉堂", "build_day": "建日", "term": "寒露 10月8日",
             "previous_term": "秋分 9月23日", "next_term": "寒露 10月8日",
             "yi": ["祭祀", "出行"], "ji": ["嫁娶", "入宅", "动土", "会亲友", "破土"],
-            "colors": {"贵人色": ["黑色", "深蓝", "深灰"], "合作色": ["白色", "银色", "金色", "浅灰"], "进财色": ["红色", "粉色"], "消耗色": ["黄色", "咖啡色", "泥土色"], "不利色": ["绿色", "青色"]},
+            "colors": compute_colors("大驿土"),
         },
     }
 
