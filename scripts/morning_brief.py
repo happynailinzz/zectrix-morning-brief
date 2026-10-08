@@ -169,6 +169,37 @@ def fetch_weather(config, date, tomorrow=False):
     }
 
 
+def aqi_level(aqi):
+    """Return AQI label in Chinese."""
+    if aqi <= 50:
+        return "优"
+    elif aqi <= 100:
+        return "良"
+    elif aqi <= 150:
+        return "轻度"
+    elif aqi <= 200:
+        return "中度"
+    elif aqi <= 300:
+        return "重度"
+    else:
+        return "严重"
+
+
+def fetch_air_quality(config):
+    location = config["location"]
+    params = {
+        "latitude": location["lat"],
+        "longitude": location["lon"],
+        "current": "us_aqi,pm2_5,pm10",
+    }
+    data = fetch_json("https://air-quality-api.open-meteo.com/v1/air-quality?" + urllib.parse.urlencode(params))
+    cur = data.get("current", {})
+    aqi = int(round(float(cur.get("us_aqi", 0))))
+    pm25 = round(float(cur.get("pm2_5", 0)), 1)
+    pm10 = round(float(cur.get("pm10", 0)), 1)
+    return {"aqi": aqi, "pm25": pm25, "pm10": pm10, "level": aqi_level(aqi)}
+
+
 def parse_holiday(date):
     data = fetch_json(HOLIDAY.format(date=date.isoformat()))
     holiday = data.get("holiday") or {}
@@ -261,7 +292,7 @@ def parse_colors(text):
 
 def sample_data(config, date):
     return {
-        "weather": {"condition": "多云转阴", "code": 3, "current": 20, "feels": 18, "humidity": 30, "high": 22, "low": 14, "rain_probability": 10, "wind_speed": 3, "wind_direction": 45, "sunrise": "06:18", "sunset": "18:08", "is_day": True, "hourly_temperatures": [15, 15, 14, 14, 15, 17, 19, 20, 21, 22, 22, 21, 20, 19, 18, 17, 16, 16, 15, 15, 14, 14, 14, 14]},
+        "weather": {"condition": "多云转阴", "code": 3, "current": 20, "feels": 18, "humidity": 30, "high": 22, "low": 14, "rain_probability": 10, "wind_speed": 3, "wind_direction": 45, "sunrise": "06:18", "sunset": "18:08", "is_day": True, "hourly_temperatures": [15, 15, 14, 14, 15, 17, 19, 20, 21, 22, 22, 21, 20, 19, 18, 17, 16, 16, 15, 15, 14, 14, 14, 14], "aqi": 75, "pm25": 18.2, "pm10": 35.6, "level": "良"},
         "holiday": {"label": "国庆假期第2天", "off": True},
         "calendar": {
             "lunar": "二〇二六年八月廿二", "ganzhi": "丙午年 丁酉月 己酉日", "day_pillar": "己酉",
@@ -430,8 +461,8 @@ def render(config, date, data, output):
         draw.text((12, 112), "次日预报", font=metric_font, fill=black)
         draw.text((metric_x, 112), "降水 %d%%" % weather.get("rain_probability", 0), font=metric_font, fill=black)
     else:
-        draw.text((12, 112), "体感 %d℃" % weather["feels"], font=metric_font, fill=black)
-        draw.text((metric_x, 112), "湿度 %d%%" % weather["humidity"], font=metric_font, fill=black)
+        draw.text((12, 112), "AQI %d" % weather.get("aqi", 0), font=metric_font, fill=black)
+        draw.text((metric_x, 112), "PM2.5 %.1f" % weather.get("pm25", 0), font=metric_font, fill=black)
     if weather.get("forecast"):
         draw.text((12, 130), "%d~%d℃" % (weather["low"], weather["high"]), font=metric_font, fill=black)
     else:
@@ -523,6 +554,9 @@ def main():
             "holiday": safe_fetch("Timor节假日", lambda: parse_holiday(target_date), {"label": "节假日数据暂不可用", "off": False}),
             "calendar": safe_fetch("全民万年历黄历", lambda: parse_qmrl(target_date), {"lunar": "黄历数据暂不可用", "colors": {}, "yi": [], "ji": []}),
         }
+    if not args.tomorrow:
+        data["air_quality"] = safe_fetch("Open-Meteo空气质量", lambda: fetch_air_quality(config), {"aqi": 0, "pm25": 0, "pm10": 0, "level": "数据暂不可用"})
+        data["weather"].update(data["air_quality"])
     render(config, target_date, data, args.output)
     print("saved %s" % args.output)
     if os.environ.get("ZECTRIX_NO_PUSH") != "1" and not args.offline_sample:
