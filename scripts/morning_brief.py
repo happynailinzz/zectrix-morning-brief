@@ -208,7 +208,10 @@ def parse_holiday(date):
         if name == "国庆节" and date.month == 10 and 1 <= date.day <= 7:
             name = "国庆假期第%d天" % date.day
         return {"label": name, "off": True}
-    return {"label": "工作日" if holiday else "日期信息未知", "off": False}
+    workday = data.get("workday") or {}
+    if workday.get("holiday") is False and workday.get("name"):
+        return {"label": "工作日（补班）", "off": False}
+    return {"label": "工作日" if data.get("code") == 0 else "日期信息未知", "off": False}
 
 
 def between(text, start, end=None):
@@ -239,7 +242,9 @@ def parse_qmrl(date):
     ji = split_items(ji_block)
     colors = parse_colors(text)
     event = first_match(r"公历\s+[^\n]+\n\n?[^\n]*（[^）]+）", text, "")
-    term_line = next_solar_term(text, date)
+    previous_term, next_term = solar_term_pair(text, date)
+    if previous_term == "无" and next_term == "无":
+        next_term = event or "无"
     return {
         "lunar": lunar,
         "ganzhi": ganzhi,
@@ -250,8 +255,31 @@ def parse_qmrl(date):
         "yi": yi,
         "ji": ji,
         "colors": colors,
-        "term": term_line or event,
+        "term": next_term,
+        "previous_term": previous_term,
+        "next_term": next_term,
     }
+
+
+def solar_term_pair(text, date):
+    """Return the most recent and next solar terms around date."""
+    terms = {"立春", "雨水", "惊蛰", "春分", "清明", "谷雨", "立夏", "小满", "芒种", "夏至", "小暑", "大暑", "立秋", "处暑", "白露", "秋分", "寒露", "霜降", "立冬", "小雪", "大雪", "冬至", "小寒", "大寒"}
+    candidates = []
+    for month, day, name in re.findall(r"(\d{1,2})月\s*(\d{1,2})日\s*([^\d\s]+)", text):
+        name = name.strip()
+        if name not in terms:
+            continue
+        try:
+            event_date = dt.date(date.year, int(month), int(day))
+        except ValueError:
+            continue
+        candidates.append((event_date, name))
+    candidates = sorted(set(candidates))
+    previous = [(event_date, name) for event_date, name in candidates if event_date <= date]
+    upcoming = [(event_date, name) for event_date, name in candidates if event_date > date]
+    previous_text = "%s %d月%d日" % (previous[-1][1], previous[-1][0].month, previous[-1][0].day) if previous else "无"
+    next_text = "%s %d月%d日" % (upcoming[0][1], upcoming[0][0].month, upcoming[0][0].day) if upcoming else "无"
+    return previous_text, next_text
 
 
 def next_solar_term(text, date):
@@ -296,7 +324,8 @@ def sample_data(config, date):
         "holiday": {"label": "国庆假期第2天", "off": True},
         "calendar": {
             "lunar": "二〇二六年八月廿二", "ganzhi": "丙午年 丁酉月 己酉日", "day_pillar": "己酉",
-            "wuxing": "大驿土", "value_god": "玉堂", "build_day": "建日", "term": "无（下个节气：寒露 10月8日）",
+            "wuxing": "大驿土", "value_god": "玉堂", "build_day": "建日", "term": "寒露 10月8日",
+            "previous_term": "秋分 9月23日", "next_term": "寒露 10月8日",
             "yi": ["祭祀", "出行"], "ji": ["嫁娶", "入宅", "动土", "会亲友", "破土"],
             "colors": {"贵人色": ["黑色", "深蓝", "深灰"], "合作色": ["白色", "银色", "金色", "浅灰"], "进财色": ["红色", "粉色"], "消耗色": ["黄色", "咖啡色", "泥土色"], "不利色": ["绿色", "青色"]},
         },
@@ -489,29 +518,30 @@ def render(config, date, data, output):
     draw.text((rx, 35), "明日黄历" if weather.get("forecast") else "今日黄历", font=f_body, fill=black)
     draw.text((388, 37), fit_width(holiday.get("label", "日期信息未知"), f_tiny, 90), font=f_tiny, fill=black, anchor="ra")
     draw.text((rx, 55), fit_width("农历 " + calendar.get("lunar", "数据暂不可用"), f_tiny, 169), font=f_tiny, fill=black)
-    draw.text((rx, 70), fit_width("节气 " + (calendar.get("term") or "无"), f_tiny, 169), font=f_tiny, fill=black)
-    draw.text((rx, 85), fit_width("日柱 %s  %s" % (calendar.get("day_pillar", "—"), calendar.get("value_god", "")), f_tiny, 169), font=f_tiny, fill=black)
-    draw.text((rx, 100), fit_width("五行 %s  %s" % (calendar.get("wuxing", "—"), calendar.get("build_day", "")), f_tiny, 169), font=f_tiny, fill=black)
-    draw.line((rx, 116, 388, 116), fill=black, width=1)
-    draw.text((rx, 121), "五行穿衣", font=f_body, fill=black)
+    draw.text((rx, 70), fit_width("上节气 " + calendar.get("previous_term", "无"), f_tiny, 169), font=f_tiny, fill=black)
+    draw.text((rx, 85), fit_width("下节气 " + calendar.get("next_term", "无"), f_tiny, 169), font=f_tiny, fill=black)
+    draw.text((rx, 100), fit_width("日柱 %s  %s" % (calendar.get("day_pillar", "—"), calendar.get("value_god", "")), f_tiny, 169), font=f_tiny, fill=black)
+    draw.text((rx, 115), fit_width("五行 %s  %s" % (calendar.get("wuxing", "—"), calendar.get("build_day", "")), f_tiny, 169), font=f_tiny, fill=black)
+    draw.line((rx, 131, 388, 131), fill=black, width=1)
+    draw.text((rx, 136), "五行穿衣", font=f_body, fill=black)
     color_rows = [("贵", "贵人色"), ("合", "合作色"), ("财", "进财色"), ("耗", "消耗色"), ("忌", "不利色")]
     for index, (prefix, key) in enumerate(color_rows):
-        y = 140 + index * 13
+        y = 155 + index * 13
         values = "、".join(calendar.get("colors", {}).get(key, [])) or "数据暂不可用"
         shade = (65, 120, 170, 205, 235)[index]
         draw.rounded_rectangle((rx, y - 1, rx + 12, y + 9), radius=2, fill=shade, outline=80, width=1)
         draw.text((rx + 5, y - 1), prefix, font=f_tiny, fill=255 if index < 2 else black, anchor="ma")
         draw.text((rx + 18, y), fit_width(values, f_tiny, 151), font=f_tiny, fill=black)
-    draw.line((rx, 208, 388, 208), fill=black, width=1)
+    draw.line((rx, 215, 388, 215), fill=black, width=1)
 
     yi = "、".join(calendar.get("yi", [])) or "数据暂不可用"
     ji = "、".join(calendar.get("ji", [])) or "数据暂不可用"
-    draw.text((rx, 213), "宜", font=f_body, fill=black)
+    draw.text((rx, 220), "宜", font=f_body, fill=black)
     for index, line in enumerate(wrap_by_width(draw, yi, f_tiny, 151, 2)):
-        draw.text((rx + 22, 216 + index * 12), line, font=f_tiny, fill=black)
-    draw.text((rx, 247), "忌", font=f_body, fill=black)
-    for index, line in enumerate(wrap_by_width(draw, ji, f_tiny, 151, 3)):
-        draw.text((rx + 22, 250 + index * 12), line, font=f_tiny, fill=black)
+        draw.text((rx + 22, 223 + index * 12), line, font=f_tiny, fill=black)
+    draw.text((rx, 250), "忌", font=f_body, fill=black)
+    for index, line in enumerate(wrap_by_width(draw, ji, f_tiny, 151, 2)):
+        draw.text((rx + 22, 253 + index * 12), line, font=f_tiny, fill=black)
     # NOTE4 is a 1BPP panel. Quantize once here so the cloud does not dither
     # already-antialiased text a second time and soften its strokes.
     one_bpp = image.point(lambda value: 0 if value < ONE_BPP_THRESHOLD else 255, mode="1")
