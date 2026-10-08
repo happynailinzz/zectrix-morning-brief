@@ -6,10 +6,11 @@
 
 ## 功能
 
-- 当前天气、今日最高/最低温度、体感温度、湿度、降水概率和风力
+- 当前天气、今日最高/最低温度、**空气质量指数（AQI）**、湿度、降水概率和风力
 - 24 小时温度柱状图、日出和日落时间
-- 农历、干支、节气、日柱、五行、值神、建日
-- 五行穿衣颜色、宜忌和穿搭建议
+- 农历（不含生肖年）、干支、**上一节气 / 下一节气两行**、日柱、五行、值神、建日
+- 五行穿衣颜色、**完整宜忌原文**（最多 12 项）、穿搭建议
+- 五行穿衣栏目下沿与左栏天气卡片下沿对齐，宜忌区排布在下方空间
 - 原生 `400x300`、`1BPP` 输出，适配 Zectrix 单色墨水屏
 - 项目内置 `assets/fonts/Zfull.ttf` 点阵字体，默认无需安装系统字体
 
@@ -239,7 +240,8 @@ ZECTRIX_TIMEZONE=Asia/Shanghai scripts/run_scheduled.sh
 
 ## 数据来源
 
-- 天气、日出日落和逐小时温度：[Open-Meteo](https://open-meteo.com/)
+- 天气、日出日落和逐小时温度：[Open-Meteo Forecast](https://open-meteo.com/)
+- 空气质量（AQI、PM2.5）：[Open-Meteo Air Quality](https://air-quality-api.open-meteo.com/)
 - 中国节假日和工作日：[Timor Holiday API](https://timor.tech/api/holiday/)
 - 农历、干支、节气、五行和宜忌：[全民万年历](https://www.qmrl888.com/)
 - 天气图标：[和风天气图标](https://icons.qweather.com/)
