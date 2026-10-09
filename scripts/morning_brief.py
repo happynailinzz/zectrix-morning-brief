@@ -645,12 +645,25 @@ def render(config, date, data, output):
 
     yi = "、".join(calendar.get("yi", [])) or "数据暂不可用"
     ji = "、".join(calendar.get("ji", [])) or "数据暂不可用"
-    draw.text((rx, 229), "宜", font=f_body, fill=black)
-    for index, line in enumerate(wrap_by_width(draw, yi, f_tiny, 151, 2)):
-        draw.text((rx + 22, 240 + index * 10), line, font=f_tiny, fill=black)
-    draw.text((rx, 261), "忌", font=f_body, fill=black)
-    for index, line in enumerate(wrap_by_width(draw, ji, f_tiny, 151, 2)):
-        draw.text((rx + 22, 272 + index * 10), line, font=f_tiny, fill=black)
+    yi_lines = wrap_by_width(draw, yi, f_tiny, 151, 2)
+    ji_lines = wrap_by_width(draw, ji, f_tiny, 151, 2)
+    # Equal-height row grid (10px): 宜 title row, 宜 body rows, 忌 title row,
+    # 忌 body rows. The whole block is vertically centered in the band under the
+    # 五行穿衣 divider, so even the 2+2-line worst case stays clear of the
+    # card's bottom frame (y=292).
+    band_top, band_bottom, row_h = 225, 291, 10
+    block_h = (2 + len(yi_lines) + len(ji_lines)) * row_h
+    y = band_top + (band_bottom - band_top - block_h) // 2
+    draw.text((rx, y), "宜", font=f_body, fill=black)
+    y += row_h
+    for line in yi_lines:
+        draw.text((rx + 22, y), line, font=f_tiny, fill=black)
+        y += row_h
+    draw.text((rx, y), "忌", font=f_body, fill=black)
+    y += row_h
+    for line in ji_lines:
+        draw.text((rx + 22, y), line, font=f_tiny, fill=black)
+        y += row_h
     # NOTE4 is a 1BPP panel. Quantize once here so the cloud does not dither
     # already-antialiased text a second time and soften its strokes.
     one_bpp = image.point(lambda value: 0 if value < ONE_BPP_THRESHOLD else 255, mode="1")
